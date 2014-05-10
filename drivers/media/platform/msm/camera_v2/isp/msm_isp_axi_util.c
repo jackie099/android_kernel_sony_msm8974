@@ -1407,7 +1407,6 @@ void msm_isp_process_axi_irq(struct vfe_device *vfe_dev,
 					/* Propagate frame drop */
 					msm_isp_process_frame_drop(vfe_dev,
 					stream_info, ts);
-
 			}
 		}
 		wm_mask &= ~(comp_info->stream_composite_mask);
@@ -1444,8 +1443,6 @@ void msm_isp_process_axi_irq(struct vfe_device *vfe_dev,
 				/* Propagate frame drop */
 				msm_isp_process_frame_drop(vfe_dev,
 				stream_info, ts);
-
-
 		}
 	}
 	return;

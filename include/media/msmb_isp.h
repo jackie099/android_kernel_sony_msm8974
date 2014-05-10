@@ -304,6 +304,7 @@ enum msm_isp_event_idx {
 	ISP_EOF             = 8,
 	ISP_FRAME_DROP      = 9,
 	ISP_EVENT_MAX       = 10
+
 };
 
 #define ISP_EVENT_OFFSET          8

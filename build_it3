@@ -1,14 +1,23 @@
 ### GCC 4.8.x
 
 ### compile kernel
-ARCH=arm CROSS_COMPILE=/home/jackie099/Desktop/arm-cortex_a15-linux-gnueabihf-linaro_4.9.1-2014.04/bin/arm-gnueabi- make -j4
+ARCH=arm CROSS_COMPILE=/home/jackie099/arm-cortex_a15-linux-gnueabihf-linaro_4.8.3-2014.04/bin/arm-gnueabi- make -j4
 
 echo "checking for compiled kernel..."
 if [ -f arch/arm/boot/zImage ]
 then
 
 echo "generating device tree..."
-./dtbTool -o dt.img -s 2048 -p scripts/dtc/ arch/arm/boot/
+./dtbTool -o ./finalf/dt.img -s 2048 -p ./scripts/dtc/ ./arch/arm/boot/
+
+### copy zImage
+cp arch/arm/boot/zImage ./finalf/.
+cp drivers/char/adsprpc.ko ./finalf/.
+cp arch/arm/mach-msm/qdsp6v2/adsp-loader.ko ./finalf/.
+cp net/wireless/cfg80211.ko ./finalf/.
+/home/jackie099/arm-cortex_a15-linux-gnueabihf-linaro_4.8.3-2014.04/bin/arm-gnueabi-strip --strip-unneeded ./finalf/adsprpc.ko
+/home/jackie099/arm-cortex_a15-linux-gnueabihf-linaro_4.8.3-2014.04/bin/arm-gnueabi-strip --strip-unneeded ./finalf/adsp-loader.ko
+/home/jackie099/arm-cortex_a15-linux-gnueabihf-linaro_4.8.3-2014.04/bin/arm-gnueabi-strip --strip-unneeded ./finalf/cfg80211.ko 
 
 echo "DONE"
 

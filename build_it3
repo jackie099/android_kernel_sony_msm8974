@@ -1,0 +1,15 @@
+### GCC 4.8.x
+
+### compile kernel
+ARCH=arm CROSS_COMPILE=/home/jackie099/Desktop/arm-cortex_a15-linux-gnueabihf-linaro_4.9.1-2014.04/bin/arm-gnueabi- make -j4
+
+echo "checking for compiled kernel..."
+if [ -f arch/arm/boot/zImage ]
+then
+
+echo "generating device tree..."
+./dtbTool -o dt.img -s 2048 -p scripts/dtc/ arch/arm/boot/
+
+echo "DONE"
+
+fi

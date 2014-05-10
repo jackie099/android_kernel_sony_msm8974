@@ -40,7 +40,7 @@ How to build your kernel:
 
   Step 2: Prepare Device Tree Image (dt.img)
     (In the Linux Kernel directory)
-    $ dtbTool -o dt.img -s 2048 -p scripts/dtc/ arch/arm/boot/
+    $ ./dtbTool -o dt.img -s 2048 -p scripts/dtc/ arch/arm/boot/
 
 
   Step 3: Assembling the boot.img

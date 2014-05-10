@@ -1,0 +1,4 @@
+### GCC 4.8.x
+
+### get defconfig
+ARCH=arm CROSS_COMPILE=/home/jackie099/Desktop/arm-cortex_a15-linux-gnueabihf-linaro_4.9.1-2014.04/bin/arm-gnueabi- make mokee_rhine_togari_row_defconfig

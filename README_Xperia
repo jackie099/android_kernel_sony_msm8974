@@ -13,8 +13,7 @@ How to build your kernel:
 
     * mkbootimg - boot.img generator
 
-    * 
-Tool - DTB combiner
+    * dtbTool - DTB combiner
       You can obtain it from various trusted sites including https://www.codeaurora.org/
 
     * The ARM cross-compiler
@@ -41,7 +40,7 @@ Tool - DTB combiner
 
   Step 2: Prepare Device Tree Image (dt.img)
     (In the Linux Kernel directory)
-    $ ./dtbTool -o dt.img -s 2048 -p scripts/dtc/ arch/arm/boot/
+    $ dtbTool -o dt.img -s 2048 -p scripts/dtc/ arch/arm/boot/
 
 
   Step 3: Assembling the boot.img

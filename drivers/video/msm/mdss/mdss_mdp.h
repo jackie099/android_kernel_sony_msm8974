@@ -422,11 +422,6 @@ struct mdss_overlay_private {
 	u32 splash_mem_addr;
 	u32 splash_mem_size;
 	u32 sd_enabled;
-
-	struct sw_sync_timeline *vsync_timeline;
-	struct mdss_mdp_vsync_handler vsync_retire_handler;
-	struct work_struct retire_work;
-	int retire_cnt;
 };
 
 struct mdss_mdp_perf_params {
@@ -471,6 +466,7 @@ static inline u32 mdss_mdp_pingpong_read(struct mdss_mdp_mixer *mixer, u32 reg)
 
 irqreturn_t mdss_mdp_isr(int irq, void *ptr);
 int mdss_iommu_attach(struct mdss_data_type *mdata);
+int mdss_iommu_dettach(struct mdss_data_type *mdata);
 int mdss_mdp_scan_cont_splash(void);
 void mdss_mdp_irq_clear(struct mdss_data_type *mdata,
 		u32 intr_type, u32 intf_num);

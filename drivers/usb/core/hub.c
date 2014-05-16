@@ -25,7 +25,6 @@
 #include <linux/mutex.h>
 #include <linux/freezer.h>
 #include <linux/usb/otg.h>
-#include <linux/random.h>
 
 #include <asm/uaccess.h>
 #include <asm/byteorder.h>
@@ -2039,14 +2038,6 @@ int usb_new_device(struct usb_device *udev)
 	/* Tell the world! */
 	announce_device(udev);
 
-	if (udev->serial)
-		add_device_randomness(udev->serial, strlen(udev->serial));
-	if (udev->product)
-		add_device_randomness(udev->product, strlen(udev->product));
-	if (udev->manufacturer)
-		add_device_randomness(udev->manufacturer,
-				      strlen(udev->manufacturer));
-
 	device_enable_async_suspend(&udev->dev);
 
 	/*
@@ -2210,7 +2201,8 @@ static int hub_port_wait_reset(struct usb_hub *hub, int port1,
 			struct usb_device *udev, unsigned int delay, bool warm)
 {
 	int delay_time, ret;
-	u16 portstatus = 0, portchange = 0;
+	u16 portstatus;
+	u16 portchange;
 
 	for (delay_time = 0;
 			delay_time < HUB_RESET_TIMEOUT;
@@ -2743,7 +2735,7 @@ int usb_port_resume(struct usb_device *udev, pm_message_t msg)
 	struct usb_hub	*hub = hdev_to_hub(udev->parent);
 	int		port1 = udev->portnum;
 	int		status;
-	u16		portchange = 0, portstatus = 0;
+	u16		portchange, portstatus;
 
 	/* Skip the initial Clear-Suspend step for a remote wakeup */
 	status = hub_port_status(hub, port1, &portstatus, &portchange);
@@ -2849,7 +2841,7 @@ int usb_port_resume(struct usb_device *udev, pm_message_t msg)
 	struct usb_hub	*hub = hdev_to_hub(udev->parent);
 	int		port1 = udev->portnum;
 	int		status;
-	u16		portchange = 0, portstatus = 0;
+	u16		portchange, portstatus;
 
 	status = hub_port_status(hub, port1, &portstatus, &portchange);
 	status = check_port_resume_type(udev,
@@ -2967,7 +2959,7 @@ static int hub_port_debounce(struct usb_hub *hub, int port1)
 {
 	int ret;
 	int total_time, stable_time = 0;
-	u16 portchange = 0, portstatus = 0;
+	u16 portchange, portstatus;
 	unsigned connection = 0xffff;
 
 	for (total_time = 0; ; total_time += HUB_DEBOUNCE_STEP) {
@@ -3734,10 +3726,10 @@ static void hub_events(void)
 	struct usb_interface *intf;
 	struct usb_hub *hub;
 	struct device *hub_dev;
-	u16 hubstatus = 0;
-	u16 hubchange = 0;
-	u16 portstatus = 0;
-	u16 portchange = 0;
+	u16 hubstatus;
+	u16 hubchange;
+	u16 portstatus;
+	u16 portchange;
 	int i, ret;
 #if defined(CONFIG_USB_PEHCI_HCD) || defined(CONFIG_USB_PEHCI_HCD_MODULE)
 	int j;

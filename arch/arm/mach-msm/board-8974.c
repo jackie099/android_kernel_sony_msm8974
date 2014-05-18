@@ -28,6 +28,7 @@
 #include <asm/setup.h>
 #include <linux/msm_tsens.h>
 #include <linux/msm_thermal.h>
+#include <linux/persistent_ram.h>
 #include <asm/mach/map.h>
 #include <asm/hardware/gic.h>
 #include <asm/mach/map.h>
@@ -35,9 +36,6 @@
 #include <mach/board.h>
 #include <mach/gpiomux.h>
 #include <mach/msm_iomap.h>
-#ifdef CONFIG_ION_MSM
-#include <mach/ion.h>
-#endif
 #include <mach/msm_memtypes.h>
 #include <mach/msm_smd.h>
 #include <mach/restart.h>
@@ -56,33 +54,13 @@
 #ifdef CONFIG_RAMDUMP_TAGS
 #include "board-rdtags.h"
 #endif
+#include "board-8974-console.h"
 #ifdef CONFIG_LCD_KCAL
 #include <mach/kcal.h>
 #include <linux/module.h>
 #include "../../../../drivers/video/msm/mdss/mdss_fb.h"
 extern int update_preset_lcdc_lut(void);
 #endif
-
-static struct memtype_reserve msm8974_reserve_table[] __initdata = {
-	[MEMTYPE_SMI] = {
-	},
-	[MEMTYPE_EBI0] = {
-		.flags	=	MEMTYPE_FLAGS_1M_ALIGN,
-	},
-	[MEMTYPE_EBI1] = {
-		.flags	=	MEMTYPE_FLAGS_1M_ALIGN,
-	},
-};
-
-static int msm8974_paddr_to_memtype(phys_addr_t paddr)
-{
-	return MEMTYPE_EBI1;
-}
-
-static struct reserve_info msm8974_reserve_info __initdata = {
-	.memtype_reserve_table = msm8974_reserve_table,
-	.paddr_to_memtype = msm8974_paddr_to_memtype,
-};
 
 #ifdef CONFIG_RAMDUMP_TAGS
 static struct resource rdtags_resources[] = {
@@ -120,6 +98,7 @@ static struct platform_device lastlogs_device = {
 };
 #endif
 
+#define DEBUG_MEM_SIZE SZ_1M
 #define RDTAGS_MEM_SIZE (256 * SZ_1K)
 #define RDTAGS_MEM_DESC_SIZE (256 * SZ_1K)
 #define LAST_LOGS_OFFSET (RDTAGS_MEM_SIZE + RDTAGS_MEM_DESC_SIZE)
@@ -136,9 +115,11 @@ static void reserve_debug_memory(void)
 	struct membank *mb = &meminfo.bank[meminfo.nr_banks - 1];
 	unsigned long bank_end = mb->start + mb->size;
 	/*Base address for rdtags*/
-	unsigned long debug_mem_base = bank_end - SZ_1M;
+	unsigned long debug_mem_base = bank_end - DEBUG_MEM_SIZE;
 	/*Base address for crash logs memory*/
+#ifdef CONFIG_CRASH_LAST_LOGS
 	unsigned long lastlogs_base = debug_mem_base + LAST_LOGS_OFFSET;
+#endif
 
 	memblock_free(debug_mem_base, SZ_1M);
 	memblock_remove(debug_mem_base, SZ_1M);
@@ -171,14 +152,52 @@ static void reserve_debug_memory(void)
 }
 #endif
 
+#ifdef CONFIG_ANDROID_PERSISTENT_RAM
+#define MSM_PERSISTENT_RAM_SIZE (SZ_1M)
+#define MSM_RAM_CONSOLE_SIZE (128 * SZ_1K)
+
+static struct persistent_ram_descriptor pr_desc = {
+#ifdef CONFIG_ANDROID_RAM_CONSOLE
+	.name = "ram_console",
+	.size = MSM_RAM_CONSOLE_SIZE
+#endif
+};
+
+static struct persistent_ram msm_pram = {
+	.size = MSM_PERSISTENT_RAM_SIZE,
+	.num_descs = 1,
+	.descs = &pr_desc
+};
+
+static void reserve_persistent_ram(void)
+{
+	struct membank *mb = &meminfo.bank[meminfo.nr_banks - 1];
+	unsigned long bank_end = mb->start + mb->size;
+
+	msm_pram.start = bank_end - DEBUG_MEM_SIZE - MSM_PERSISTENT_RAM_SIZE;
+	persistent_ram_early_init(&msm_pram);
+}
+#endif
+
+#ifdef CONFIG_ANDROID_RAM_CONSOLE
+static struct platform_device ram_console_device = {
+	.name           = "ram_console",
+	.id             = -1,
+	.dev = {
+		.platform_data = &ram_console_pdata,
+	}
+};
+#endif
+
 void __init msm_8974_reserve(void)
 {
 #if defined(CONFIG_RAMDUMP_TAGS) || defined(CONFIG_CRASH_LAST_LOGS)
 	reserve_debug_memory();
 #endif
-	reserve_info = &msm8974_reserve_info;
-	of_scan_flat_dt(dt_scan_for_memory_reserve, msm8974_reserve_table);
-	msm_reserve();
+#ifdef CONFIG_ANDROID_PERSISTENT_RAM
+	reserve_persistent_ram();
+#endif
+	of_scan_flat_dt(dt_scan_for_memory_reserve, NULL);
 }
 
 #ifdef CONFIG_LCD_KCAL
@@ -229,8 +248,7 @@ void __init add_lcd_kcal_devices(void)
 
 static void __init msm8974_early_memory(void)
 {
-	reserve_info = &msm8974_reserve_info;
-	of_scan_flat_dt(dt_scan_for_memory_hole, msm8974_reserve_table);
+	of_scan_flat_dt(dt_scan_for_memory_hole, NULL);
 }
 
 void __init msm8974_add_devices(void)
@@ -240,6 +258,9 @@ void __init msm8974_add_devices(void)
 #endif
 #ifdef CONFIG_CRASH_LAST_LOGS
 	platform_device_register(&lastlogs_device);
+#endif
+#ifdef CONFIG_ANDROID_RAM_CONSOLE
+	platform_device_register(&ram_console_device);
 #endif
 }
 

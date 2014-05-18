@@ -26,7 +26,6 @@
 #include <linux/slab.h>
 #include <linux/msm_audio.h>
 
-#include <linux/memory_alloc.h>
 #include <linux/debugfs.h>
 #include <linux/time.h>
 #include <linux/atomic.h>
@@ -155,6 +154,10 @@ static int audio_output_latency_dbgfs_open(struct inode *inode,
 static ssize_t audio_output_latency_dbgfs_read(struct file *file,
 				char __user *buf, size_t count, loff_t *ppos)
 {
+	if (out_buffer == NULL) {
+		pr_err("%s: out_buffer is null\n", __func__);
+		return 0;
+	}
 	snprintf(out_buffer, OUT_BUFFER_SIZE, "%ld,%ld,%ld,%ld,%ld,%ld,",\
 		out_cold_tv.tv_sec, out_cold_tv.tv_usec, out_warm_tv.tv_sec,\
 		out_warm_tv.tv_usec, out_cont_tv.tv_sec, out_cont_tv.tv_usec);
@@ -200,6 +203,10 @@ static int audio_input_latency_dbgfs_open(struct inode *inode,
 static ssize_t audio_input_latency_dbgfs_read(struct file *file,
 				char __user *buf, size_t count, loff_t *ppos)
 {
+	if (in_buffer == NULL) {
+		pr_err("%s: in_buffer is null\n", __func__);
+		return 0;
+	}
 	snprintf(in_buffer, IN_BUFFER_SIZE, "%ld,%ld,",\
 				in_cont_tv.tv_sec, in_cont_tv.tv_usec);
 	return  simple_read_from_buffer(buf, IN_BUFFER_SIZE, ppos,
@@ -315,17 +322,30 @@ static void config_debug_fs_write(struct audio_buffer *ab)
 static void config_debug_fs_init(void)
 {
 	out_buffer = kmalloc(OUT_BUFFER_SIZE, GFP_KERNEL);
+	if (out_buffer == NULL) {
+		pr_err("%s: kmalloc() for out_buffer failed\n", __func__);
+		goto fail_1;
+	}
+	in_buffer = kmalloc(IN_BUFFER_SIZE, GFP_KERNEL);
+	if (in_buffer == NULL) {
+		pr_err("%s: kmalloc() for in_buffer failed\n", __func__);
+		goto fail_2;
+	}
 	out_dentry = debugfs_create_file("audio_out_latency_measurement_node",\
 				S_IRUGO | S_IWUSR | S_IWGRP,\
 				NULL, NULL, &audio_output_latency_debug_fops);
 	if (IS_ERR(out_dentry))
-		pr_err("debugfs_create_file failed\n");
-	in_buffer = kmalloc(IN_BUFFER_SIZE, GFP_KERNEL);
+		pr_err("%s: debugfs_create_file failed\n", __func__);
 	in_dentry = debugfs_create_file("audio_in_latency_measurement_node",\
 				S_IRUGO | S_IWUSR | S_IWGRP,\
 				NULL, NULL, &audio_input_latency_debug_fops);
 	if (IS_ERR(in_dentry))
-		pr_err("debugfs_create_file failed\n");
+		pr_err("%s: debugfs_create_file failed\n", __func__);
+	return;
+fail_2:
+	kfree(out_buffer);
+fail_1:
+	return;
 }
 #else
 static void config_debug_fs_write(struct audio_buffer *ab)
@@ -3903,6 +3923,11 @@ int q6asm_read(struct audio_client *ac)
 		mutex_lock(&port->lock);
 
 		dsp_buf = port->dsp_buf;
+		if (port->buf == NULL) {
+			pr_err("%s buf is NULL\n", __func__);
+			mutex_unlock(&port->lock);
+			return -EINVAL;
+		}
 		ab = &port->buf[dsp_buf];
 
 		pr_debug("%s:session[%d]dsp-buf[%d][%p]cpu_buf[%d][%p]\n",

@@ -430,7 +430,8 @@ int mmc_add_card(struct mmc_card *card)
 	if (ret)
 		return ret;
 
-	if (mmc_use_core_runtime_pm(card->host) && !mmc_card_sdio(card)) {
+	device_enable_async_suspend(&card->dev);
+	if (mmc_use_core_runtime_pm(card->host)) {
 		card->rpm_attrib.show = show_rpm_delay;
 		card->rpm_attrib.store = store_rpm_delay;
 		sysfs_attr_init(&card->rpm_attrib.attr);

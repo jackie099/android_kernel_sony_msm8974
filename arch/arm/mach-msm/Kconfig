@@ -287,6 +287,7 @@ config ARCH_MSM8974
 	select ARCH_WANT_KMAP_ATOMIC_FLUSH
 	select KRAIT_REGULATOR
 	select ENABLE_VMALLOC_SAVINGS
+	select MSM_AVTIMER
 	select HAVE_NMI_WATCHDOG if MSM_WATCHDOG_V2
 	select HAS_MACH_MEMUTILS
 
@@ -1987,17 +1988,17 @@ config MSM_CPU_FREQ_MIN
 	depends on MSM_CPU_FREQ_SET_MIN_MAX
 	default 245760
 
-config CPU_VOLTAGE_TABLE
-	bool "Enable CPU Voltage Table via sysfs for adjustements"
-	default n
-	help
-	  Krait User Votlage Control
-
 config INTELLI_PLUG
 	bool "Enable intelli-plug cpu hotplug driver"
 	default n
 	help
 	  Generic Intelli-plug cpu hotplug driver for ARM SOCs
+
+config ALUCARD_HOTPLUG
+	bool "Enable alucard-hotplug cpu hotplug driver"
+	default n
+	help
+	  Generic Alucard-hotplug cpu hotplug driver for ARM SOCs
 
 config MSM_CPUFREQ_LIMITER
 	tristate "MSM CPU frequency limiter"
@@ -2009,19 +2010,32 @@ config MSM_CPUFREQ_LIMITER
 	  module will be called cpufreq_stats.
 
 	  If in doubt, say N.
-
-config CPU_OC
-	bool "allow 2.3 GHz OC bin"
+	 
+config CPU_VDD_CONTROL
+	bool "Expose voltage control to userspace"
 	default n
 	help
-	  Unlock the CPU Overclock freq speed @ 2.3 GHz
+	  Allows to set the voltage level for each frequency scaling steps from userspace through a sysfs interface.
 
-config OC_ULTIMATE
+config CPU_OC
+	bool "allow 2.26 GHz max freq option"
+	default n
+	help
+	  Force the PVS bin speed selection to 1, allowing 2.26GHz maximum frequencies
+
+config CPU_OC_ULTIMATE
 	bool "allow 2.419 GHz max OC option"
 	depends on CPU_OC
 	default n
 	help
 	  Unlock the ultimate Overclock freq speed @ 2.419 GHz
+
+config PVS_SPEED_CONTROL
+	bool "sysfs interface to force PVS speed bin"
+	depends on CPU_OC
+	default n
+	help
+	  sysfs interface to force PVS speed bin
 
 endif # CPU_FREQ_MSM
 
@@ -2038,6 +2052,17 @@ config MSM_DEVFREQ_CPUBW
 	  DDR IB/AB bandwidth votes. This driver provides a SoC topology
 	  agnostic interface to so that some of the devfreq governors can be
 	  shared across SoCs.
+
+config MSM_CPUFREQ_LIMITER
+	tristate "MSM CPU frequency limiter"
+	default n
+	help
+	  This driver limits MSM CPU frequency through sysfs file system.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called cpufreq_stats.
+
+	  If in doubt, say N.	
 
 config TURBO_BOOST
 	bool "Enable CPU Turbo boost option"
@@ -3235,3 +3260,11 @@ config MSM_MODEM_SUBSYSTEM_RESTART_MONITOR
 	  This option enables a module which can notify user-space
 	  applications of modem subsystem power up/down event via uevent.
 endif
+
+config PVS_CONTROL
+	bool "CPU PVS binning selection"
+	default n
+	help
+	  This option enables a module which can for the CPU's PVS binning,
+	  allowing to effectively choose the frequency/voltage table.
+	  

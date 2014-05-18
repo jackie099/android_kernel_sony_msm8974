@@ -2143,7 +2143,7 @@ static int slim_tx_mixer_put(struct snd_kcontrol *kcontrol,
 				if (wcd9xxx_tx_vport_validation(
 						vtable,
 						port_id,
-						taiko_p->dai)) {
+						taiko_p->dai, NUM_CODEC_DAIS)) {
 					dev_dbg(codec->dev, "%s: TX%u is used by other virtual port\n",
 						__func__, port_id + 1);
 					mutex_unlock(&codec->mutex);
@@ -4192,13 +4192,8 @@ EXPORT_SYMBOL(taiko_write);
 static int taiko_startup(struct snd_pcm_substream *substream,
 		struct snd_soc_dai *dai)
 {
-	struct wcd9xxx *taiko_core = dev_get_drvdata(dai->codec->dev->parent);
 	pr_debug("%s(): substream = %s  stream = %d\n" , __func__,
 		 substream->name, substream->stream);
-	if ((taiko_core != NULL) &&
-	    (taiko_core->dev != NULL) &&
-	    (taiko_core->dev->parent != NULL))
-		pm_runtime_get_sync(taiko_core->dev->parent);
 
 	return 0;
 }
@@ -4206,15 +4201,8 @@ static int taiko_startup(struct snd_pcm_substream *substream,
 static void taiko_shutdown(struct snd_pcm_substream *substream,
 		struct snd_soc_dai *dai)
 {
-	struct wcd9xxx *taiko_core = dev_get_drvdata(dai->codec->dev->parent);
 	pr_debug("%s(): substream = %s  stream = %d\n" , __func__,
 		 substream->name, substream->stream);
-	if ((taiko_core != NULL) &&
-	    (taiko_core->dev != NULL) &&
-	    (taiko_core->dev->parent != NULL)) {
-		pm_runtime_mark_last_busy(taiko_core->dev->parent);
-		pm_runtime_put(taiko_core->dev->parent);
-	}
 }
 
 int taiko_mclk_enable(struct snd_soc_codec *codec, int mclk_enable, bool dapm)
@@ -7023,6 +7011,11 @@ static int taiko_resume(struct device *dev)
 {
 	struct platform_device *pdev = to_platform_device(dev);
 	struct taiko_priv *taiko = platform_get_drvdata(pdev);
+
+	if (!taiko) {
+		dev_err(dev, "%s: taiko private data is NULL\n", __func__);
+		return -EINVAL;
+	}
 	dev_dbg(dev, "%s: system resume\n", __func__);
 	/* Notify */
 	wcd9xxx_resmgr_notifier_call(&taiko->resmgr, WCD9XXX_EVENT_POST_RESUME);

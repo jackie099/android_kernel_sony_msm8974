@@ -443,24 +443,26 @@ obj-$(CONFIG_MSM_CPR_REGULATOR) += cpr-regulator.o
 obj-$(CONFIG_CPU_FREQ_MSM) += cpufreq.o
 obj-$(CONFIG_MSM_DEVFREQ_CPUBW) += devfreq_cpubw.o
 obj-$(CONFIG_INTELLI_PLUG) += intelli_plug.o
+obj-$(CONFIG_ALUCARD_HOTPLUG) += alucard_hotplug.o
 
 obj-$(CONFIG_WALL_CLK) += wallclk.o
 obj-$(CONFIG_WALL_CLK_SYSFS) += wallclk_sysfs.o
-obj-$(CONFIG_MSM_CPUFREQ_LIMITER) += cpufreq_limit.o
-obj-$(CONFIG_FORCE_FAST_CHARGE) += fastchg.o
-obj-$(CONFIG_TURBO_BOOST) += msm_turbo.o
 obj-$(CONFIG_MSM_SLEEPER) += msm-sleeper.o
-
+obj-$(CONFIG_TURBO_BOOST) += msm_turbo.o
 obj-$(CONFIG_LCD_KCAL) += board_kcal.o kcal_ctrl.o
 
+obj-$(CONFIG_FORCE_FAST_CHARGE) += fastchg.o
+obj-$(CONFIG_MSM_CPUFREQ_LIMITER) += cpufreq_limit.o
+obj-$(CONFIG_PVS_SPEED_CONTROL) += pvs_speed_control.o
 obj-$(CONFIG_HAS_MACH_MEMUTILS) += memutils/
 
 obj-$(CONFIG_ARCH_RANDOM) += early_random.o
 obj-$(CONFIG_PERFMAP) += perfmap.o
+obj-$(CONFIG_PVS_CONTROL) += pvs_control.o
 obj-$(CONFIG_RAMDUMP_TAGS) += board-rdtags.o
 CFLAGS_board-rdtags.o  := \
 	-D"INFO_PRODUCT=\"$(if $(TARGET_PRODUCT),$(TARGET_PRODUCT),unknown)\"" \
 	-D"INFO_VARIANT= \
 	\"$(if $(TARGET_BUILD_VARIANT),$(TARGET_BUILD_VARIANT),unknown)\"" \
 	-D"INFO_BUILDID=\"$(if $(SEMC_SYSTEM_VERSION),$(SEMC_SYSTEM_VERSION),private)\""
-
+CFLAGS_board-8974-console.o += -Idrivers/staging/android

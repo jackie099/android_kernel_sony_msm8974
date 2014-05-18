@@ -686,9 +686,9 @@
 		qcom,adsp-state = <2>;
 	};
 
-	qti,msm-pcm {
-		compatible = "qti,msm-pcm-dsp";
-		qti,msm-pcm-dsp-id = <0>;
+	qcom,msm-pcm {
+		compatible = "qcom,msm-pcm-dsp";
+		qcom,msm-pcm-dsp-id = <0>;
 	};
 
 	qcom,msm-pcm-routing {
@@ -898,8 +898,7 @@
 
 	qcom,msm-rtb {
 		compatible = "qcom,msm-rtb";
-		qcom,memory-reservation-type = "EBI1";
-		qcom,memory-reservation-size = <0x1000>; /* 4K EBI1 buffer */
+		qcom,rtb-size = <0x1000>; /* 4K EBI1 buffer */
 	};
 
         qcom,msm-mem-hole {

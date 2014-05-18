@@ -13,8 +13,7 @@
 
 #ifndef __MSM_THERMAL_H
 #define __MSM_THERMAL_H
- 
-#ifdef CONFIG_INTELLI_THERMAL
+
 struct msm_thermal_data {
 	uint32_t sensor_id;
 	uint32_t poll_ms;
@@ -22,18 +21,6 @@ struct msm_thermal_data {
 	int32_t temp_hysteresis_degC;
 	uint32_t freq_step;
 	uint32_t freq_control_mask;
-	int32_t core_limit_temp_degC;
-	int32_t core_temp_hysteresis_degC;
-	uint32_t core_control_mask;
-	int32_t vdd_rstr_temp_degC;
-	int32_t vdd_rstr_temp_hyst_degC;
-};
-#else
-struct msm_thermal_data {
-	uint32_t sensor_id;
-	uint32_t poll_ms;
-	int32_t limit_temp_degC;
-	int32_t temp_hysteresis_degC;
 	uint32_t bootup_freq_step;
 	uint32_t bootup_freq_control_mask;
 	int32_t core_limit_temp_degC;
@@ -52,13 +39,10 @@ struct msm_thermal_data {
 	int32_t ocr_temp_degC;
 	int32_t ocr_temp_hyst_degC;
 };
-#endif
 
 #if defined(CONFIG_THERMAL_MONITOR) || defined(CONFIG_INTELLI_THERMAL)
 extern int msm_thermal_init(struct msm_thermal_data *pdata);
-#ifdef CONFIG_THERMAL_MONITOR
 extern int msm_thermal_device_init(void);
-#endif
 extern int msm_thermal_set_frequency(uint32_t cpu, uint32_t freq,
 	bool is_max);
 #else

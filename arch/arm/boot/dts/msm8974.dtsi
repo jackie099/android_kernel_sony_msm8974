@@ -71,23 +71,56 @@
 
 	memory {
 		secure_mem: secure_region {
-			linux,contiguous-region;
+			linux,reserve-contiguous-region;
 			reg = <0 0xFC00000>;
 			label = "secure_mem";
 		};
 
 		adsp_mem: adsp_region {
-			linux,contiguous-region;
+			linux,reserve-contiguous-region;
 			reg = <0 0x3F00000>;
 			label = "adsp_mem";
 		};
 
 		qsecom_mem: qsecom_region {
-			linux,contiguous-region;
+			linux,reserve-contiguous-region;
 			reg = <0 0x1100000>;
 			label = "qseecom_mem";
 		};
 
+		fb_mem: fb_region {
+			linux,reserve-reserve-contiguous-region;
+			reg = <0 0x800000>;
+			label = "fb_mem";
+		};
+
+		audio_mem: audio_region {
+			linux,reserve-contiguous-region;
+			linux,reserve-region;
+			reg = <0 0x614000>;
+			label = "audio_mem";
+		};
+
+		peripheral_mem: peripheral_region@5d00000 {
+			linux,reserve-contiguous-region;
+			linux,reserve-region;
+			linux,remove-completely;
+			reg = <0x5d00000 0x7d00000>;
+			label = "peripheral_mem";
+		};
+
+		external_image_mem: external_image_region@fa00000 {
+			linux,reserve-contiguous-region;
+			linux,reserve-region;
+			linux,remove-completely;
+			reg = <0xfa00000 0x500000>;
+		};
+
+		camera_mem: camera_region {
+			linux,reserve-contiguous-region;
+			reg = <0 0x6400000>;
+			label = "camera_mem";
+		};
 	};
 
 	soc: soc { };
@@ -706,6 +739,7 @@
 		interrupt-names = "slimbus_irq", "slimbus_bam_irq";
 		qcom,apps-ch-pipes = <0x60000000>;
 		qcom,ea-pc = <0x30>;
+		qcom,slim-mdm = <1>;
 
 		taiko_codec {
 			compatible = "qcom,taiko-slim-pgd";
@@ -1783,6 +1817,7 @@
 		compatible = "qcom,msm-cpufreq";
 		qcom,cpufreq-table =
 			<  300000  300000  572 >,
+			<  345600  345600  572 >,
 			<  422400  422400 1144 >,
 			<  652800  499200 1525 >,
 			<  729600  576000 2342 >,
@@ -1795,8 +1830,9 @@
 			< 1574400 1574400 6103 >,
 			< 1728000 1651200 6103 >,
 			< 1958400 1728000 7102 >,
+			< 2112000 1728000 7102 >,
 			< 2265600 1728000 7102 >,
-			< 2457600 1728000 7102 >;
+			< 2419200 1728000 7102 >;
 	};
 
 	usb3: qcom,ssusb@f9200000 {
@@ -1891,16 +1927,16 @@
 		compatible = "qcom,msm-audio-ion";
 	};
 
-	qti,msm-pcm {
-		compatible = "qti,msm-pcm-dsp";
-		qti,msm-pcm-dsp-id = <0>;
+	qcom,msm-pcm {
+		compatible = "qcom,msm-pcm-dsp";
+		qcom,msm-pcm-dsp-id = <0>;
 	};
 
-	qti,msm-pcm-low-latency {
-		compatible = "qti,msm-pcm-dsp";
-		qti,msm-pcm-dsp-id = <1>;
-		qti,msm-pcm-low-latency;
-		qti,latency-level = "regular";
+	qcom,msm-pcm-low-latency {
+		compatible = "qcom,msm-pcm-dsp";
+		qcom,msm-pcm-dsp-id = <1>;
+		qcom,msm-pcm-low-latency;
+		qcom,latency-level = "regular";
 	};
 
 	qcom,msm-pcm-routing {
@@ -1948,8 +1984,8 @@
 		compatible = "qcom,msm-lsm-client";
 	};
 
-	qti,msm-pcm-loopback {
-		compatible = "qti,msm-pcm-loopback";
+	qcom,msm-pcm-loopback {
+		compatible = "qcom,msm-pcm-loopback";
 	};
 
 	qcom,msm-dai-q6 {
@@ -2115,10 +2151,6 @@
 
 	qcom,msm-adsp-sensors {
 		compatible = "qcom,msm-adsp-sensors";
-		qcom,src-id = <11>;
-		qcom,dst-id = <604>;
-		qcom,ab = <32505856>;
-		qcom,ib = <32505856>;
 	};
 
 	qcom,mss@fc880000 {
@@ -2341,8 +2373,7 @@
 
 	qcom,msm-rtb {
 		compatible = "qcom,msm-rtb";
-		qcom,memory-reservation-type = "EBI1";
-		qcom,memory-reservation-size = <0x100000>; /* 1M EBI1 buffer */
+		qcom,rtb-size = <0x100000>; /* 1M EBI1 buffer */
 	};
 
 	qcom,msm-contig-mem {
@@ -2485,10 +2516,15 @@
 		qcom,rx-ring-size = <64>;
 	};
 
-        memory_hole: qcom,msm-mem-hole {
-                compatible = "qcom,msm-mem-hole";
-                qcom,memblock-remove = <0x5d00000 0xa200000>; /* Address and Size of Hole */
-        };
+	ram_console {
+		compatible = "ram_console";
+		bootinfo = <0>;
+	};
+
+	memory_hole: qcom,msm-mem-hole {
+		compatible = "qcom,msm-mem-hole";
+		qcom,memblock-remove = <0x5d00000 0xa200000>; /* Address and Size of Hole */
+	};
 
 	uart7: uart@f995d000 { /*BLSP #2, UART #7 */
 		compatible = "qcom,msm-hsuart-v14";
@@ -2674,6 +2710,13 @@
 			qcom,smdtty-port-name = "LOOPBACK";
 			qcom,smdtty-dev-name = "LOOPBACK_TTY";
 		};
+	};
+
+	qcom,avtimer {
+		compatible = "qcom,avtimer";
+		reg = <0xfe053008 0x4>,
+			<0xfe05300c 0x4>;
+		reg-names = "avtimer_lsb_addr", "avtimer_msb_addr";
 	};
 
 	sony,ric_info {

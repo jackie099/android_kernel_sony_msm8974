@@ -17,6 +17,7 @@
  *
  */
 
+#include <linux/earlysuspend.h>
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/cpufreq.h>
@@ -83,6 +84,16 @@ unsigned long msm_cpufreq_get_bw(void)
 	return mem_bw[max_freq_index];
 }
 
+static DEFINE_PER_CPU(struct cpu_freq, cpu_freq_info);
+
+struct cpu_freq {
+	uint32_t max;
+	uint32_t min;
+	uint32_t allowed_max;
+	uint32_t allowed_min;
+	uint32_t limits_init;
+};
+
 static void update_l2_bw(int *also_cpu)
 {
 	int rc = 0, cpu;
@@ -117,16 +128,6 @@ out:
 extern int msm_turbo(int);
 #endif
 
-struct cpu_freq {
-	uint32_t max;
-	uint32_t min;
-	uint32_t allowed_max;
-	uint32_t allowed_min;
-	uint32_t limits_init;
-};
-
-static DEFINE_PER_CPU(struct cpu_freq, cpu_freq_info);
-
 static int set_cpu_freq(struct cpufreq_policy *policy, unsigned int new_freq,
 			unsigned int index)
 {
@@ -135,19 +136,6 @@ static int set_cpu_freq(struct cpufreq_policy *policy, unsigned int new_freq,
 	int saved_sched_rt_prio = -EINVAL;
 	struct cpufreq_freqs freqs;
 	struct sched_param param = { .sched_priority = MAX_RT_PRIO-1 };
-	struct cpu_freq *limit = &per_cpu(cpu_freq_info, policy->cpu);
-
-	if (limit->limits_init) {
-		if (new_freq > limit->allowed_max) {
-			new_freq = limit->allowed_max;
-			pr_debug("max: limiting freq to %d\n", new_freq);
-		}
-
-		if (new_freq < limit->allowed_min) {
-			new_freq = limit->allowed_min;
-			pr_debug("min: limiting freq to %d\n", new_freq);
-		}
-	}
 
 #ifdef CONFIG_TURBO_BOOST
 	new_freq = msm_turbo(new_freq);
@@ -270,10 +258,6 @@ static unsigned int msm_cpufreq_get_freq(unsigned int cpu)
 	return acpuclk_get_rate(cpu);
 }
 
-#ifdef CONFIG_LOW_CPUCLOCKS
-#define LOW_CPUCLOCKS_FREQ_MIN	162000
-#endif
-
 static inline int msm_cpufreq_limits_init(void)
 {
 	int cpu = 0;
@@ -335,6 +319,10 @@ int msm_cpufreq_set_freq_limits(uint32_t cpu, uint32_t min, uint32_t max)
 }
 EXPORT_SYMBOL(msm_cpufreq_set_freq_limits);
 
+#ifdef CONFIG_LOW_CPUCLOCKS
+#define LOW_CPUCLOCKS_FREQ_MIN	162000
+#endif
+
 static int __cpuinit msm_cpufreq_init(struct cpufreq_policy *policy)
 {
 	int cur_freq;
@@ -365,20 +353,12 @@ static int __cpuinit msm_cpufreq_init(struct cpufreq_policy *policy)
 
 	if (cpufreq_frequency_table_cpuinfo(policy, table)) {
 #ifdef CONFIG_MSM_CPU_FREQ_SET_MIN_MAX
-#ifdef CONFIG_LOW_CPUCLOCKS
-		policy->cpuinfo.min_freq = LOW_CPUCLOCKS_FREQ_MIN;
-#else
 		policy->cpuinfo.min_freq = CONFIG_MSM_CPU_FREQ_MIN;
-#endif
 		policy->cpuinfo.max_freq = CONFIG_MSM_CPU_FREQ_MAX;
 #endif
 	}
 #ifdef CONFIG_MSM_CPU_FREQ_SET_MIN_MAX
-#ifdef CONFIG_LOW_CPUCLOCKS
-	policy->min = LOW_CPUCLOCKS_FREQ_MIN;
-#else
 	policy->min = CONFIG_MSM_CPU_FREQ_MIN;
-#endif
 	policy->max = CONFIG_MSM_CPU_FREQ_MAX;
 #endif
 
@@ -411,6 +391,10 @@ static int __cpuinit msm_cpufreq_init(struct cpufreq_policy *policy)
 
 	return 0;
 }
+
+#ifdef CONFIG_CPU_FREQ_GOV_INTELLIDEMAND
+extern bool lmf_screen_state;
+#endif
 
 static int __cpuinit msm_cpufreq_cpu_callback(struct notifier_block *nfb,
 		unsigned long action, void *hcpu)

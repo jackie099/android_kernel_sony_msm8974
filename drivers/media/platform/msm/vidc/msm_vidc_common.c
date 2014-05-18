@@ -463,6 +463,9 @@ static void handle_session_init_done(enum command_response cmd, void *data)
 				session_init_done->frame_rate;
 			inst->capability.scale_x = session_init_done->scale_x;
 			inst->capability.scale_y = session_init_done->scale_y;
+			inst->capability.ltr_count =
+				session_init_done->ltr_count;
+			inst->capability.hier_p = session_init_done->hier_p;
 			inst->capability.pixelprocess_capabilities =
 				call_hfi_op(hdev, get_core_capabilities);
 			inst->capability.capability_set = true;
@@ -1117,6 +1120,7 @@ static void handle_fbd(enum command_response cmd, void *data)
 	struct vidc_hal_fbd *fill_buf_done;
 	enum hal_buffer buffer_type;
 	int64_t time_usec = 0;
+	int extra_idx = 0;
 
 	if (!response) {
 		dprintk(VIDC_ERR, "Invalid response from vidc_hal\n");
@@ -1163,6 +1167,15 @@ static void handle_fbd(enum command_response cmd, void *data)
 				ns_to_timeval(time_usec * NSEC_PER_USEC);
 		}
 		vb->v4l2_buf.flags = 0;
+		extra_idx =
+			EXTRADATA_IDX(inst->fmts[CAPTURE_PORT]->num_planes);
+		if (extra_idx && (extra_idx < VIDEO_MAX_PLANES)) {
+			vb->v4l2_planes[extra_idx].m.userptr =
+				(unsigned long)fill_buf_done->extra_data_buffer;
+			vb->v4l2_planes[extra_idx].bytesused =
+				vb->v4l2_planes[extra_idx].length;
+			vb->v4l2_planes[extra_idx].data_offset = 0;
+		}
 
 		handle_dynamic_buffer(inst, (u32)fill_buf_done->packet_buffer1,
 					fill_buf_done->flags1);
@@ -1182,6 +1195,8 @@ static void handle_fbd(enum command_response cmd, void *data)
 			vb->v4l2_buf.flags |= V4L2_QCOM_BUF_DATA_CORRUPT;
 		if (fill_buf_done->flags1 & HAL_BUFFERFLAG_DROP_FRAME)
 			vb->v4l2_buf.flags |= V4L2_QCOM_BUF_DROP_FRAME;
+		if (fill_buf_done->flags1 & HAL_BUFFERFLAG_MBAFF)
+			vb->v4l2_buf.flags |= V4L2_MSM_BUF_FLAG_MBAFF;
 		switch (fill_buf_done->picture_type) {
 		case HAL_PICTURE_IDR:
 			vb->v4l2_buf.flags |= V4L2_QCOM_BUF_FLAG_IDRFRAME;
@@ -1217,6 +1232,13 @@ static void handle_fbd(enum command_response cmd, void *data)
 		fill_buf_done->start_y_coord, fill_buf_done->frame_width,
 		fill_buf_done->frame_height, fill_buf_done->picture_type);
 
+		if (extra_idx && (extra_idx < VIDEO_MAX_PLANES)) {
+			dprintk(VIDC_DBG,
+			"extradata: userptr = %p;  bytesused = %d; length = %d\n",
+			(u8 *)vb->v4l2_planes[extra_idx].m.userptr,
+			vb->v4l2_planes[extra_idx].bytesused,
+			vb->v4l2_planes[extra_idx].length);
+		}
 		mutex_lock(&inst->bufq[CAPTURE_PORT].lock);
 		vb2_buffer_done(vb, VB2_BUF_STATE_DONE);
 		mutex_unlock(&inst->bufq[CAPTURE_PORT].lock);
@@ -3121,6 +3143,18 @@ enum hal_extradata_id msm_comm_get_hal_extradata_index(
 	case V4L2_MPEG_VIDC_EXTRADATA_MPEG2_SEQDISP:
 		ret = HAL_EXTRADATA_MPEG2_SEQDISP;
 		break;
+	case V4L2_MPEG_VIDC_EXTRADATA_FRAME_QP:
+		ret = HAL_EXTRADATA_FRAME_QP;
+		break;
+	case V4L2_MPEG_VIDC_EXTRADATA_FRAME_BITS_INFO:
+		ret = HAL_EXTRADATA_FRAME_BITS_INFO;
+		break;
+	case V4L2_MPEG_VIDC_EXTRADATA_LTR:
+		ret = HAL_EXTRADATA_LTR_INFO;
+		break;
+	case V4L2_MPEG_VIDC_EXTRADATA_METADATA_MBI:
+		ret = HAL_EXTRADATA_METADATA_MBI;
+		break;
 	default:
 		dprintk(VIDC_WARN, "Extradata not found: %d\n", index);
 		break;
@@ -3284,10 +3318,24 @@ int msm_vidc_check_session_supported(struct msm_vidc_inst *inst)
 
 	rc = msm_vidc_load_supported(inst);
 	if (!rc && inst->capability.capability_set) {
-		rc = call_hfi_op(hdev, capability_check,
-			inst->fmts[OUTPUT_PORT]->fourcc,
-			inst->prop.width[CAPTURE_PORT], &capability->width.max,
-			&capability->height.max);
+		if (inst->prop.width[CAPTURE_PORT] < capability->width.min ||
+			inst->prop.height[CAPTURE_PORT] <
+			capability->height.min) {
+			dprintk(VIDC_ERR,
+				"Unsupported WxH = (%u)x(%u), min supported is - (%u)x(%u)\n",
+				inst->prop.width[CAPTURE_PORT],
+				inst->prop.height[CAPTURE_PORT],
+				capability->width.min,
+				capability->height.min);
+			rc = -ENOTSUPP;
+		}
+		if (!rc) {
+			rc = call_hfi_op(hdev, capability_check,
+				inst->fmts[OUTPUT_PORT]->fourcc,
+				inst->prop.width[CAPTURE_PORT],
+				&capability->width.max,
+				&capability->height.max);
+		}
 
 		if (!rc && (inst->prop.height[CAPTURE_PORT]
 			* inst->prop.width[CAPTURE_PORT] >
@@ -3305,7 +3353,6 @@ int msm_vidc_check_session_supported(struct msm_vidc_inst *inst)
 		inst->state = MSM_VIDC_CORE_INVALID;
 		mutex_unlock(&inst->sync_lock);
 		msm_vidc_queue_v4l2_event(inst, V4L2_EVENT_MSM_VIDC_SYS_ERROR);
-		wake_up(&inst->kernel_event_queue);
 	}
 	return rc;
 }

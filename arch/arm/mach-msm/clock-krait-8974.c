@@ -453,6 +453,16 @@ static void get_krait_bin_format_b(struct platform_device *pdev,
 		*pvs = (pte_efuse >> 27) & 0xF;
 		break;
 	}
+	
+#ifdef CONFIG_CPU_OC
+#ifdef CONFIG_CPU_OC_ULTIMATE
+    *speed = 3;
+    dev_info(&pdev->dev, "Androguide: Forcing CPU OC ULTIMATE!\n");
+#else
+	*speed = 1;
+    dev_info(&pdev->dev, "Androguide: Forcing CPU OC!\n");
+#endif
+#endif
 
 	/* Check SPEED_BIN_BLOW_STATUS */
 	if (pte_efuse & BIT(3)) {
@@ -472,18 +482,6 @@ static void get_krait_bin_format_b(struct platform_device *pdev,
 	}
 
 	dev_info(&pdev->dev, "PVS version: %d\n", *pvs_ver);
-
-#ifdef CONFIG_CPU_OC
-#ifdef CONFIG_OC_ULTIMATE
-	dev_info(&pdev->dev, "DooMLoRD: Forcing CPU OC Ultimate!\n");
-	*speed = 3;
-#else
-	dev_info(&pdev->dev, "DooMLoRD: Forcing CPU OC!\n");
-	*speed = 1;
-#endif
-	dev_info(&pdev->dev, "CPU OC: Speed bin: %d\n", *speed);
-#endif
-
 	devm_iounmap(&pdev->dev, base);
 }
 
@@ -811,6 +809,51 @@ static struct platform_driver clock_krait_8974_driver = {
 		.owner = THIS_MODULE,
 	},
 };
+
+#ifdef CONFIG_CPU_VDD_CONTROL
+ssize_t vc_get_vdd(char *buf)
+{
+	struct clk_vdd_class *vdd = krait0_clk.c.vdd_class;
+        int i, len = 0;
+	int levels = vdd->num_levels;
+
+        if (buf) {
+                for(i=1; i < levels; i++) {
+                        len += sprintf(buf + len, "%umhz: %d mV\n",
+				(unsigned int)krait0_clk.c.fmax[i]/1000000,
+                                vdd->vdd_uv[i]/1000 );
+                }
+        }
+        return len;
+}
+void vc_set_vdd(const char *buf)
+{
+	struct clk_vdd_class *vdd0 = krait0_clk.c.vdd_class;
+	struct clk_vdd_class *vdd1 = krait1_clk.c.vdd_class;
+	struct clk_vdd_class *vdd2 = krait2_clk.c.vdd_class;
+	struct clk_vdd_class *vdd3 = krait3_clk.c.vdd_class;
+        int ret, i;
+        char size_cur[16];
+        unsigned int volt;
+	int levels = vdd0->num_levels;
+
+        for(i=1; i < levels; i++) {
+            ret = sscanf(buf, "%d", &volt);
+            pr_info("[imoseyon]: voltage for %lu changed to %d\n",
+		krait0_clk.c.fmax[i]/1000, volt*1000);
+            vdd0->vdd_uv[i] = min(max((unsigned int)volt*1000,
+                (unsigned int)600000), (unsigned int)1350000);
+            vdd1->vdd_uv[i] = min(max((unsigned int)volt*1000,
+                (unsigned int)600000), (unsigned int)1350000);
+            vdd2->vdd_uv[i] = min(max((unsigned int)volt*1000,
+                (unsigned int)600000), (unsigned int)1350000);
+            vdd3->vdd_uv[i] = min(max((unsigned int)volt*1000,
+                (unsigned int)600000), (unsigned int)1350000);
+            ret = sscanf(buf, "%s", size_cur);
+            buf += (strlen(size_cur)+1);
+        }
+}
+#endif
 
 static int __init clock_krait_8974_init(void)
 {

@@ -1297,17 +1297,36 @@ wakeup_preempt_entity(struct sched_entity *curr, struct sched_entity *se);
  * 3) pick the "last" process, for cache locality
  * 4) do not run the "skip" process, if something else is available
  */
-static struct sched_entity *pick_next_entity(struct cfs_rq *cfs_rq)
+static struct sched_entity *
+pick_next_entity(struct cfs_rq *cfs_rq, struct sched_entity *curr)
 {
-	struct sched_entity *se = __pick_first_entity(cfs_rq);
-	struct sched_entity *left = se;
+	struct sched_entity *left = __pick_first_entity(cfs_rq);
+	struct sched_entity *se;
+
+	/*
+	 * If curr is set we have to see if its left of the leftmost entity
+	 * still in the tree, provided there was anything in the tree at all.
+	 */
+	if (!left || (curr && entity_before(curr, left)))
+		left = curr;
+
+	se = left; /* ideally we run the leftmost entity */
 
 	/*
 	 * Avoid running the skip buddy, if running something else can
 	 * be done without getting too unfair.
 	 */
 	if (cfs_rq->skip == se) {
-		struct sched_entity *second = __pick_next_entity(se);
+		struct sched_entity *second;
+
+		if (se == curr) {
+			second = __pick_first_entity(cfs_rq);
+		} else {
+			second = __pick_next_entity(se);
+			if (!second || (curr && entity_before(curr, second)))
+				second = curr;
+		}
+
 		if (second && wakeup_preempt_entity(second, left) < 1)
 			se = second;
 	}
@@ -1329,7 +1348,7 @@ static struct sched_entity *pick_next_entity(struct cfs_rq *cfs_rq)
 	return se;
 }
 
-static void check_cfs_rq_runtime(struct cfs_rq *cfs_rq);
+static bool check_cfs_rq_runtime(struct cfs_rq *cfs_rq);
 
 static void put_prev_entity(struct cfs_rq *cfs_rq, struct sched_entity *prev)
 {
@@ -1958,22 +1977,23 @@ static void check_enqueue_throttle(struct cfs_rq *cfs_rq)
 }
 
 /* conditionally throttle active cfs_rq's from put_prev_entity() */
-static void check_cfs_rq_runtime(struct cfs_rq *cfs_rq)
+static bool check_cfs_rq_runtime(struct cfs_rq *cfs_rq)
 {
 	if (!cfs_bandwidth_used())
-		return;
+		return false;
 
 	if (likely(!cfs_rq->runtime_enabled || cfs_rq->runtime_remaining > 0))
-		return;
+		return false;
 
 	/*
 	 * it's possible for a throttled entity to be forced into a running
 	 * state (e.g. set_curr_task), in this case we're finished.
 	 */
 	if (cfs_rq_throttled(cfs_rq))
-		return;
+		return true;
 
 	throttle_cfs_rq(cfs_rq);
+	return true;
 }
 
 static inline u64 default_cfs_period(void);
@@ -2083,7 +2103,7 @@ static void unthrottle_offline_cfs_rqs(struct rq *rq)
 #else /* CONFIG_CFS_BANDWIDTH */
 static __always_inline
 void account_cfs_rq_runtime(struct cfs_rq *cfs_rq, unsigned long delta_exec) {}
-static void check_cfs_rq_runtime(struct cfs_rq *cfs_rq) {}
+static bool check_cfs_rq_runtime(struct cfs_rq *cfs_rq) { return false; }
 static void check_enqueue_throttle(struct cfs_rq *cfs_rq) {}
 static __always_inline void return_cfs_rq_runtime(struct cfs_rq *cfs_rq) {}
 
@@ -2987,20 +3007,28 @@ preempt:
 
 static struct task_struct *pick_next_task_fair(struct rq *rq)
 {
-	struct task_struct *p;
 	struct cfs_rq *cfs_rq = &rq->cfs;
 	struct sched_entity *se;
+	struct task_struct *p;
+
+#ifdef CONFIG_FAIR_GROUP_SCHED
+	if (!cfs_rq->nr_running)
+		return NULL;
+
+	cfs_rq = &rq->cfs;
+#endif
 
 	if (!cfs_rq->nr_running)
 		return NULL;
 
 	do {
-		se = pick_next_entity(cfs_rq);
+		se = pick_next_entity(cfs_rq, NULL);
 		set_next_entity(cfs_rq, se);
 		cfs_rq = group_cfs_rq(se);
 	} while (cfs_rq);
 
 	p = task_of(se);
+
 	if (hrtick_enabled(rq))
 		hrtick_start_fair(rq, p);
 
@@ -3205,7 +3233,7 @@ int can_migrate_task(struct task_struct *p, struct lb_env *env)
  *
  * Called with both runqueues locked.
  */
-static int move_one_task(struct lb_env *env)
+static int move_one_task(struct lb_env *env, int *total_run_moved)
 {
 	struct task_struct *p, *n;
 
@@ -3223,6 +3251,10 @@ static int move_one_task(struct lb_env *env)
 		 * stats here rather than inside move_task().
 		 */
 		schedstat_inc(env->sd, lb_gained[env->idle]);
+		if (sysctl_sched_ravg_window)
+			*total_run_moved += div64_u64((u64)p->se.ravg.demand *
+					100, (u64)(sysctl_sched_ravg_window));
+
 		return 1;
 	}
 	return 0;
@@ -3239,7 +3271,7 @@ static const unsigned int sched_nr_migrate_break = 32;
  *
  * Called with both runqueues locked.
  */
-static int move_tasks(struct lb_env *env)
+static int move_tasks(struct lb_env *env, int *total_run_moved)
 {
 	struct list_head *tasks = &env->src_rq->cfs_tasks;
 	struct task_struct *p;
@@ -3281,6 +3313,9 @@ static int move_tasks(struct lb_env *env)
 		move_task(p, env);
 		pulled++;
 		env->load_move -= load;
+		if (sysctl_sched_ravg_window)
+			*total_run_moved += div64_u64((u64)p->se.ravg.demand *
+					100, (u64)(sysctl_sched_ravg_window));
 
 #ifdef CONFIG_PREEMPT
 		/*
@@ -4420,6 +4455,7 @@ static int load_balance(int this_cpu, struct rq *this_rq,
 			int *balance)
 {
 	int ld_moved, active_balance = 0;
+	int total_run_moved = 0;
 	struct sched_group *group;
 	unsigned long imbalance;
 	struct rq *busiest = NULL;
@@ -4479,7 +4515,7 @@ more_balance:
 		double_rq_lock(this_rq, busiest);
 		if (!env.loop)
 			update_h_load(env.src_cpu);
-		ld_moved += move_tasks(&env);
+		ld_moved += move_tasks(&env, &total_run_moved);
 		double_rq_unlock(this_rq, busiest);
 		local_irq_restore(flags);
 
@@ -4555,10 +4591,15 @@ more_balance:
 	} else {
 		sd->nr_balance_failed = 0;
 		if (per_cpu(dbs_boost_needed, this_cpu)) {
+			struct migration_notify_data mnd;
+
 			per_cpu(dbs_boost_needed, this_cpu) = false;
+
+			mnd.src_cpu = cpu_of(busiest);
+			mnd.dest_cpu = this_cpu;
+			mnd.load = total_run_moved;
 			atomic_notifier_call_chain(&migration_notifier_head,
-						   this_cpu,
-						   (void *)cpu_of(busiest));
+						   0, (void *)&mnd);
 		}
 	}
 	if (likely(!active_balance)) {
@@ -4665,6 +4706,7 @@ static int active_load_balance_cpu_stop(void *data)
 	struct rq *busiest_rq = data;
 	int busiest_cpu = cpu_of(busiest_rq);
 	int target_cpu = busiest_rq->push_cpu;
+	int total_run_moved = 0;
 	struct rq *target_rq = cpu_rq(target_cpu);
 	struct sched_domain *sd;
 
@@ -4709,7 +4751,7 @@ static int active_load_balance_cpu_stop(void *data)
 
 		schedstat_inc(sd, alb_count);
 
-		if (move_one_task(&env))
+		if (move_one_task(&env, &total_run_moved))
 			schedstat_inc(sd, alb_pushed);
 		else
 			schedstat_inc(sd, alb_failed);
@@ -4720,10 +4762,15 @@ out_unlock:
 	busiest_rq->active_balance = 0;
 	raw_spin_unlock_irq(&busiest_rq->lock);
 	if (per_cpu(dbs_boost_needed, target_cpu)) {
+		struct migration_notify_data mnd;
+
 		per_cpu(dbs_boost_needed, target_cpu) = false;
+
+		mnd.src_cpu = cpu_of(busiest_rq);
+		mnd.dest_cpu = target_cpu;
+		mnd.load = total_run_moved;
 		atomic_notifier_call_chain(&migration_notifier_head,
-					   target_cpu,
-					   (void *)cpu_of(busiest_rq));
+					   0, (void *)&mnd);
 	}
 	return 0;
 }
@@ -5285,15 +5332,15 @@ static void switched_from_fair(struct rq *rq, struct task_struct *p)
 	struct cfs_rq *cfs_rq = cfs_rq_of(se);
 
 	/*
-	 * Ensure the task's vruntime is normalized, so that when its
+	 * Ensure the task's vruntime is normalized, so that when it's
 	 * switched back to the fair class the enqueue_entity(.flags=0) will
 	 * do the right thing.
 	 *
-	 * If it was on_rq, then the dequeue_entity(.flags=0) will already
-	 * have normalized the vruntime, if it was !on_rq, then only when
+	 * If it's on_rq, then the dequeue_entity(.flags=0) will already
+	 * have normalized the vruntime, if it's !on_rq, then only when
 	 * the task is sleeping will it still have non-normalized vruntime.
 	 */
-	if (!se->on_rq && p->state != TASK_RUNNING) {
+	if (!p->on_rq && p->state != TASK_RUNNING) {
 		/*
 		 * Fix up our vruntime so that the current sleep doesn't
 		 * cause 'unlimited' sleep bonus.
